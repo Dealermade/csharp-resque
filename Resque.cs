@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using StackExchange.Redis;
+using Serilog;
 
 namespace Resque
 {
@@ -19,11 +20,17 @@ namespace Resque
         public static Dictionary<string, Type> RegisteredJobs = new Dictionary<string, Type>();
         public static ConnectionMultiplexer redisClient;
         public static IDatabase db;
+        internal static ILogger Logger;
 
         public static void SetRedis(string hostname = "localhost", int port = 6379, int database = 0)
         {
             redisClient = ConnectionMultiplexer.Connect(String.Format("{0}:{1}", hostname, port));
             db = redisClient.GetDatabase(database);
+        }
+
+        public static void SetLogger(ILogger logger)
+        {
+            Logger = logger;
         }
 
         public static void Push(string queue, JObject item)

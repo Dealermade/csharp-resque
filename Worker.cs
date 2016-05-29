@@ -228,15 +228,7 @@ namespace Resque
 
         public void Log(string message)
         {
-            switch (LogLevel)
-            {
-                case LogType.Normal:
-                    Console.WriteLine("*** " + message);
-                    break;
-                case LogType.Verbose:
-                    Console.WriteLine(string.Format("[{0}] {1}", DateTime.UtcNow.ToString("u"), message));
-                    break;
-            }
+            Resque.Logger.Information(String.Format("RESQUE: {0}", message));
         }
 
         public JObject Job()
