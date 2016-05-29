@@ -22,10 +22,7 @@ namespace Resque.Failures
                                new JProperty("queue", Queue)
                            };
 
-            using (var redis = Resque.PooledRedisClientManager.GetClient())
-            {
-                redis.PushItemToList("resque:failed", data.ToString());
-            }
+            Resque.db.ListRightPush("resque:failed", data.ToString());
         }
     }
 }

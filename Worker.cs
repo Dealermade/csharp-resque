@@ -149,7 +149,7 @@ namespace Resque
 
         public string[] FetchQueues()
         {
-            return Resque.Queues().ToArray();
+            return Resque.Queues().Select(key => key.ToString()).ToArray();
         }
 
         private void Startup()
@@ -177,11 +177,8 @@ namespace Resque
 
         private void RegisterWorker()
         {
-            using (var redis = Resque.PooledRedisClientManager.GetClient())
-            {
-                redis.AddItemToSet("resque:workers", ToString());
-                redis.Set("resque:worker:" + ToString() + ":started", CurrentTimeFormatted());
-            }
+            Resque.db.SetAdd("resque:workers", ToString());
+            Resque.db.StringSet("resque:worker:" + ToString() + ":started", CurrentTimeFormatted());
         }
 
         public void UnregisterWorker()
@@ -191,12 +188,10 @@ namespace Resque
                 _currentJob.Fail(new DirtyExitException());
             }
 
-            using (var redis = Resque.PooledRedisClientManager.GetClient())
-            {
-                redis.RemoveItemFromSet("resque:workers", Id);
-                redis.Remove("resque:worker:" + Id);
-                redis.Remove("resque:worker:" + Id + ":started");
-            }
+            Resque.db.SetRemove("resque:workers", Id);
+            Resque.db.KeyDelete("resque:worker:" + Id);
+            Resque.db.KeyDelete("resque:worker:" + Id + ":started");
+            
 
             Stat.Clear("processed:" + Id);
             Stat.Clear("failed:" + Id);
@@ -214,10 +209,8 @@ namespace Resque
                                new JProperty("run_at", CurrentTimeFormatted()),
                                new JProperty("payload", job.Payload)
                            };
-            using (var redis = Resque.PooledRedisClientManager.GetClient())
-            {
-                redis.Set("resque:worker:" + job.Worker, data.ToString());
-            }
+            
+            Resque.db.StringSet("resque:worker:" + job.Worker, data.ToString());
         }
 
         public void DoneWorking()
@@ -225,10 +218,7 @@ namespace Resque
             _currentJob = null;
             Stat.Increment("processed");
             Stat.Increment("processed:" + ToString());
-            using (var redis = Resque.PooledRedisClientManager.GetClient())
-            {
-                redis.Remove("resque:worker:" + ToString());
-            }
+            Resque.db.KeyDelete("resque:worker:" + ToString());
         }
 
         public override string ToString()
@@ -251,11 +241,7 @@ namespace Resque
 
         public JObject Job()
         {
-            using (var redis = Resque.PooledRedisClientManager.GetClient())
-            {
-                return JsonConvert.DeserializeObject<JObject>(redis.GetValue("resque:worker:" + Id));
-            }
-            
+            return JsonConvert.DeserializeObject<JObject>(Resque.db.StringGet("resque:worker:" + Id));
         }
 
         public int GetStat(string stat)

@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using ServiceStack.Redis;
+using StackExchange.Redis;
 
 namespace Resque
 {
@@ -17,39 +17,31 @@ namespace Resque
 
         public const double Version = 1.0;
         public static Dictionary<string, Type> RegisteredJobs = new Dictionary<string, Type>();
-        public static PooledRedisClientManager PooledRedisClientManager;
+        public static ConnectionMultiplexer redisClient;
+        public static IDatabase db;
 
-        public static void SetRedis(string hostname = "localhost", int port = 6379, long database = 0)
+        public static void SetRedis(string hostname = "localhost", int port = 6379, int database = 0)
         {
-            PooledRedisClientManager = new PooledRedisClientManager(new[] {hostname + ":" + port},
-                                                                    new[] {hostname + ":" + port}, database);
+            redisClient = ConnectionMultiplexer.Connect(String.Format("{0}:{1}", hostname, port));
+            db = redisClient.GetDatabase(database);
         }
 
         public static void Push(string queue, JObject item)
         {
-            using (var redis = PooledRedisClientManager.GetClient())
-            {
-                redis.AddItemToSet(RESQUE_QUEUES_KEY, queue);
-                redis.PushItemToList(RESQUE_QUEUE_KEY_PREFIX + queue, item.ToString());
-            }
+            db.SetAdd(RESQUE_QUEUES_KEY, queue);
+            db.ListRightPush(RESQUE_QUEUE_KEY_PREFIX + queue, item.ToString());
         }
 
         public static JObject Pop(string queue)
         {
-            using (var redis = PooledRedisClientManager.GetClient())
-            {
-                var data = redis.PopItemFromList(RESQUE_QUEUE_KEY_PREFIX + queue);
-                if (data == null) return null;
-                return JsonConvert.DeserializeObject<JObject>(data);
-            }
+            var data = db.ListRightPop(RESQUE_QUEUE_KEY_PREFIX + queue);
+            if (data.IsNullOrEmpty) return null;
+            return JsonConvert.DeserializeObject<JObject>(data);
         }
 
         public static long Size(string queue)
         {
-            using (var redis = PooledRedisClientManager.GetClient())
-            {
-                return redis.GetListCount(RESQUE_QUEUE_KEY_PREFIX + queue);
-            }
+            return db.ListLength(RESQUE_QUEUE_KEY_PREFIX + queue);
         }
 
         public static bool Enqueue(string queue, string className, JObject arguments, bool trackStatus = false)
@@ -78,12 +70,9 @@ namespace Resque
             RegisteredJobs.Add(className, type);
         }
 
-        public static HashSet<string> Queues()
-        {
-            using (var redis = PooledRedisClientManager.GetClient())
-            {
-                return redis.GetAllItemsFromSet(RESQUE_QUEUES_KEY);
-            }
+        public static RedisValue[] Queues()
+        { 
+            return db.ListRange(RESQUE_QUEUES_KEY);
         }
     }
 }
