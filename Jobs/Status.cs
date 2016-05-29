@@ -33,24 +33,19 @@ namespace Resque.Jobs
                                        new JProperty("started", unixTimestamp)
                                    };
 
-            using (var redis = Resque.PooledRedisClientManager.GetClient())
-            {
-                redis.Set("resque:job:" + id + ":status", statusPacket.ToString());
-            }
+            Resque.db.StringSet("resque:job:" + id + ":status", statusPacket.ToString());
         }
 
         public bool IsTracking()
         {
             if (_isTracking == false) return false;
 
-            using (var redis = Resque.PooledRedisClientManager.GetClient())
+            if (!Resque.db.StringGet(ToString()).IsNull)
             {
-                if (redis.GetValue(ToString()) != null)
-                {
-                    _isTracking = false;
-                    return false;
-                }
+                _isTracking = false;
+                return false;
             }
+            
 
             _isTracking = true;
             return true;
@@ -68,15 +63,14 @@ namespace Resque.Jobs
                                        new JProperty("updated", unixTimestamp)
                                    };
 
-            using (var redis = Resque.PooledRedisClientManager.GetClient())
-            {
-                redis.Set(ToString(), statusPacket.ToString());
+            
+            Resque.db.StringSet(ToString(), statusPacket.ToString());
 
-                if (CompleteStatuses.Contains(status))
-                {
-                    redis.ExpireEntryIn(ToString(), new TimeSpan(1, 0, 0, 0));
-                }
+            if (CompleteStatuses.Contains(status))
+            {
+                Resque.db.KeyExpire(ToString(), new TimeSpan(1, 0, 0, 0));
             }
+            
         }
 
         public int? Get()
@@ -85,15 +79,13 @@ namespace Resque.Jobs
 
             try
             {
-                using (var redis = Resque.PooledRedisClientManager.GetClient())
-                {
-                    var statusPacket =
-                        JsonConvert.DeserializeObject<JObject>(redis.GetValue(ToString()));
+                var statusPacket =
+                JsonConvert.DeserializeObject<JObject>(Resque.db.StringGet(ToString()).ToString());
 
-                    if (statusPacket == null) return null;
+                if (statusPacket == null) return null;
 
-                    return statusPacket["status"].Value<int>();
-                }
+                return statusPacket["status"].Value<int>();
+                
             }
             catch (Exception)
             {
@@ -103,10 +95,7 @@ namespace Resque.Jobs
 
         public void Stop()
         {
-            using (var redis = Resque.PooledRedisClientManager.GetClient())
-            {
-                redis.Remove(ToString());
-            }
+            Resque.db.KeyDelete(ToString());
         }
 
         public override string ToString()
