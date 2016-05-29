@@ -13,7 +13,9 @@ namespace Resque
         public JObject Payload { get; set; }
         public string Queue { get; set; }
         public Worker Worker { get; set; }
-
+        public DateTime StartTime { get; set; }
+        public DateTime EndTime { get; set; }
+        public TimeSpan Duration { get { return StartTime - EndTime; } }
         public int? Status
         {
             get
@@ -104,6 +106,7 @@ namespace Resque
 
         public bool Perform()
         {
+            StartTime = DateTime.Now;
             var instance = GetInstance();
 
             var type = Resque.RegisteredJobs[Payload["class"].ToString()];
@@ -127,6 +130,7 @@ namespace Resque
                 {
                     tearDownMethod.Invoke(instance, new object[] { });
                 }
+                EndTime = DateTime.Now;
 
                 Event.OnAfterPerform(this, EventArgs.Empty);
             }
@@ -134,6 +138,7 @@ namespace Resque
             {
                 return false;
             }
+            
 
             return true;
         }
