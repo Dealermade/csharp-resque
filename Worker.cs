@@ -228,7 +228,7 @@ namespace Resque
 
         public void Log(string message)
         {
-            Resque.Logger.Information(String.Format("RESQUE: {0}", message));
+            Resque.Logger.Information(String.Format("{{aspect}}: {0}", message), "RESQUE");
         }
 
         public JObject Job()
